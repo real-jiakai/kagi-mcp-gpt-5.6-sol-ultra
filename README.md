@@ -2,8 +2,8 @@
 
 # Kagi Session MCP
 
-A compact, local-only MCP server that lets an AI agent search Kagi with the
-Session Link from your own paid account.
+A compact Node.js stdio MCP server that lets any compatible AI agent search
+Kagi with the Session Link from your own paid account.
 
 It exposes two read-only tools:
 
@@ -11,6 +11,15 @@ It exposes two read-only tools:
   date, related queries, pagination metadata, and a short in-memory cache.
 - `kagi_list_lenses` - active and inactive account Lenses with the numeric IDs
   required by Kagi's current HTML search frontend.
+
+It works with Codex, OpenClaw, Hermes Agent, and other stdio-capable MCP
+clients.
+
+> **Acknowledgement:** Development and documentation were assisted by
+> GPT-5.6 Sol Ultra in Codex. The package name records that development
+> context; it does not imply sponsorship, certification, or endorsement by
+> OpenAI. This is an independent, unofficial project and is not affiliated
+> with or endorsed by Kagi or OpenAI.
 
 ## Important status
 
@@ -83,6 +92,14 @@ This PowerShell form avoids putting the secret directly in the command line:
 $env:KAGI_SESSION_TOKEN = Read-Host "Paste the Kagi token or complete Session Link"
 ```
 
+On macOS, Linux, or WSL:
+
+```bash
+read -rsp "Paste the Kagi token or complete Session Link: " KAGI_SESSION_TOKEN
+export KAGI_SESSION_TOKEN
+printf '\n'
+```
+
 Do not put the real value in `.env.example`. This project does not load `.env`
 files automatically, which avoids silently copying a full account credential
 into the project.
@@ -104,12 +121,48 @@ kagi-mcp-gpt-5.6-sol-ultra
 ```
 
 When started directly, the command waits for MCP messages on stdin; an idle
-terminal is expected. In normal use, let Codex or another MCP client start it.
+terminal is expected. In normal use, let your MCP client start it.
 
-## Codex configuration with npx
+## Use with an MCP client
 
-Codex supports local stdio MCP servers through `command` and `args`. Add this
-to `~/.codex/config.toml` (on Windows, normally
+Every client launches the same local stdio command:
+
+```text
+npx -y kagi-mcp-gpt-5.6-sol-ultra
+```
+
+The client must pass `KAGI_SESSION_TOKEN` to that process. Prefer inheriting it
+from the client process or resolving it from a local secret store instead of
+writing the real value into a configuration file.
+
+### Generic JSON configuration
+
+For clients that use the common `mcpServers` JSON shape:
+
+```json
+{
+  "mcpServers": {
+    "kagi-session": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "kagi-mcp-gpt-5.6-sol-ultra"
+      ],
+      "env": {
+        "KAGI_SESSION_TOKEN": "PASTE_LOCALLY_OR_RESOLVE_FROM_YOUR_SECRET_STORE"
+      }
+    }
+  }
+}
+```
+
+Many desktop MCP clients store the `env` object as plain text. Prefer an
+inherited environment variable or your client's secret store when available,
+and never share the resulting configuration file.
+
+### Codex
+
+Add this to `~/.codex/config.toml` (on Windows, normally
 `C:\Users\YOUR_USER\.codex\config.toml`):
 
 ```toml
@@ -140,31 +193,55 @@ See the official
 [Codex MCP documentation](https://learn.chatgpt.com/docs/extend/mcp.md) for
 the shared Codex MCP configuration format.
 
-## Other MCP clients
+### OpenClaw
 
-For clients that use JSON configuration, launch the public npm package with
-`npx`:
+Set `KAGI_SESSION_TOKEN` in the environment that starts OpenClaw, then save a
+stdio server definition without copying the secret into OpenClaw's config:
 
-```json
-{
-  "mcpServers": {
-    "kagi-session": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "kagi-mcp-gpt-5.6-sol-ultra"
-      ],
-      "env": {
-        "KAGI_SESSION_TOKEN": "PASTE_LOCALLY_OR_INHERIT_FROM_YOUR_SECRET_STORE"
-      }
-    }
-  }
-}
+```bash
+openclaw mcp set kagi-session '{"command":"npx","args":["-y","kagi-mcp-gpt-5.6-sol-ultra"],"env":{"KAGI_SESSION_TOKEN":"${KAGI_SESSION_TOKEN}"},"requestTimeoutMs":60000,"connectionTimeoutMs":30000,"toolFilter":{"include":["kagi_search","kagi_list_lenses"]}}'
+openclaw mcp doctor kagi-session --probe
 ```
 
-Many desktop MCP clients store the `env` object as plain text. Prefer an
-inherited environment variable or your client's secret store when available.
-Never send that configuration file to anyone.
+The `${KAGI_SESSION_TOKEN}` value is resolved from OpenClaw's process
+environment at activation time. OpenClaw can also load it from its trusted
+global environment file at `~/.openclaw/.env`. See the official
+[OpenClaw MCP](https://docs.openclaw.ai/cli/mcp) and
+[environment-variable](https://docs.openclaw.ai/help/environment)
+documentation. On Windows, OpenClaw recommends
+[WSL2](https://docs.openclaw.ai/windows) for the most compatible setup.
+
+### Hermes Agent
+
+Store the credential in Hermes Agent's private environment file:
+
+```dotenv
+# ~/.hermes/.env
+KAGI_SESSION_TOKEN=your_token_or_complete_session_link
+```
+
+Then add the server to `~/.hermes/config.yaml`:
+
+```yaml
+mcp_servers:
+  kagi:
+    command: "npx"
+    args: ["-y", "kagi-mcp-gpt-5.6-sol-ultra"]
+    env:
+      KAGI_SESSION_TOKEN: "${KAGI_SESSION_TOKEN}"
+    enabled: true
+    tools:
+      include:
+        - kagi_search
+        - kagi_list_lenses
+```
+
+`~/.hermes/.env` is a local plaintext file, so restrict its permissions and
+never commit or share it. Verify the server with `hermes mcp test kagi` and
+`hermes mcp list`, then start `hermes chat`. If you edit the configuration
+during a session, use `/reload-mcp`; Hermes exposes these tools with names such
+as `mcp_kagi_kagi_search`. See the official
+[Hermes Agent MCP guide](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp/).
 
 ## Local source checkout and Windows DPAPI development
 
@@ -180,18 +257,20 @@ npm run check
 
 Build output is written to `dist`.
 
-### DPAPI credential launcher
+### Windows credential storage with DPAPI
 
-For a persistent local Codex development installation, store the credential
-encrypted for the current Windows user:
+For a persistent local source installation, store the credential encrypted for
+the current Windows user:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass `
   -File .\scripts\store-session-token.ps1
 ```
 
-Then add this to `C:\Users\YOUR_USER\.codex\config.toml`, replacing the
-checkout path with its absolute location:
+Point any stdio-capable MCP client at
+`scripts\run-with-session-token.mjs`. For example, in Codex add this to
+`C:\Users\YOUR_USER\.codex\config.toml`, replacing the checkout path with its
+absolute location:
 
 ```toml
 [mcp_servers.kagi_session]
@@ -209,8 +288,8 @@ The encrypted value is stored under
 `%APPDATA%\kagi-session-mcp\session-token.dpapi`. The launcher decrypts it
 only in memory, starts the locally built MCP server, and forwards MCP stdio
 directly. This launcher belongs to the source checkout; the npm/npx setup above
-uses the inherited environment variable instead. Restart Codex after changing
-`config.toml`.
+uses the inherited environment variable instead. Restart the MCP client after
+changing its configuration.
 
 To test the exact installed launcher without exposing the credential:
 

@@ -2,7 +2,7 @@
 
 # Kagi Session MCP
 
-一个紧凑、仅限本地使用的 MCP 服务器，让 AI 智能体可以通过你自己的
+一个紧凑的 Node.js stdio MCP 服务器，让任何兼容的 AI 智能体都可以通过你自己的
 Kagi 付费账户 Session Link 搜索 Kagi。
 
 它提供两个只读工具：
@@ -11,6 +11,12 @@ Kagi 付费账户 Session Link 搜索 Kagi。
   可选日期、相关查询、分页元数据，以及一个短时内存缓存。
 - `kagi_list_lenses` —— 返回账户中已启用和未启用的 Lens，以及 Kagi
   当前 HTML 搜索前端所需的数字 ID。
+
+它可与 Codex、OpenClaw、Hermes Agent 以及其他支持 stdio 的 MCP 客户端配合使用。
+
+> **致谢：** 本项目的开发与文档编写使用了 Codex 中的 GPT-5.6 Sol Ultra
+> 辅助。包名仅用于记录这一开发背景，不代表 OpenAI 对本项目的赞助、认证或背书。
+> 本项目是独立的非官方项目，与 Kagi 或 OpenAI 无隶属关系，也未获得其官方背书。
 
 ## 重要说明
 
@@ -79,6 +85,14 @@ Kagi 会话的 Session Link，引入认证、授权、TLS、部署和多用户�
 $env:KAGI_SESSION_TOKEN = Read-Host "Paste the Kagi token or complete Session Link"
 ```
 
+在 macOS、Linux 或 WSL 上：
+
+```bash
+read -rsp "Paste the Kagi token or complete Session Link: " KAGI_SESSION_TOKEN
+export KAGI_SESSION_TOKEN
+printf '\n'
+```
+
 不要把真实值写入 `.env.example`。本项目不会自动加载 `.env` 文件，以免在
 不知情的情况下把完整账户凭据复制到项目中。
 
@@ -98,12 +112,46 @@ kagi-mcp-gpt-5.6-sol-ultra
 ```
 
 直接启动时，命令会等待来自 stdin 的 MCP 消息，因此终端空闲等待属于正常
-现象。日常使用时，应由 Codex 或其他 MCP 客户端启动它。
+现象。日常使用时，应由你的 MCP 客户端启动它。
 
-## 使用 npx 配置 Codex
+## 配置 MCP 客户端
 
-Codex 通过 `command` 和 `args` 支持本地 stdio MCP 服务器。将以下内容添加
-到 `~/.codex/config.toml`（Windows 上通常是
+所有客户端都会启动同一个本地 stdio 命令：
+
+```text
+npx -y kagi-mcp-gpt-5.6-sol-ultra
+```
+
+客户端必须把 `KAGI_SESSION_TOKEN` 传给该进程。建议由客户端进程继承该变量，
+或从本地密钥存储中解析它，而不是把真实值写进配置文件。
+
+### 通用 JSON 配置
+
+对于使用常见 `mcpServers` JSON 结构的客户端：
+
+```json
+{
+  "mcpServers": {
+    "kagi-session": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "kagi-mcp-gpt-5.6-sol-ultra"
+      ],
+      "env": {
+        "KAGI_SESSION_TOKEN": "PASTE_LOCALLY_OR_RESOLVE_FROM_YOUR_SECRET_STORE"
+      }
+    }
+  }
+}
+```
+
+许多桌面 MCP 客户端会以明文保存 `env` 对象。条件允许时，请优先继承环境变量
+或使用客户端提供的密钥存储，并且不要分享最终生成的配置文件。
+
+### Codex
+
+将以下内容添加到 `~/.codex/config.toml`（Windows 上通常是
 `C:\Users\YOUR_USER\.codex\config.toml`）：
 
 ```toml
@@ -132,29 +180,52 @@ command = "C:\\Users\\YOUR_USER\\.codex\\tools\\node\\npx.cmd"
 共享的 Codex MCP 配置格式请参阅官方
 [Codex MCP 文档](https://learn.chatgpt.com/docs/extend/mcp.md)。
 
-## 其他 MCP 客户端
+### OpenClaw
 
-对于使用 JSON 配置的客户端，通过 `npx` 启动公开 npm 包：
+先在启动 OpenClaw 的环境中设置 `KAGI_SESSION_TOKEN`，然后保存 stdio
+服务器定义；这样无需把密钥复制到 OpenClaw 配置中：
 
-```json
-{
-  "mcpServers": {
-    "kagi-session": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "kagi-mcp-gpt-5.6-sol-ultra"
-      ],
-      "env": {
-        "KAGI_SESSION_TOKEN": "PASTE_LOCALLY_OR_INHERIT_FROM_YOUR_SECRET_STORE"
-      }
-    }
-  }
-}
+```bash
+openclaw mcp set kagi-session '{"command":"npx","args":["-y","kagi-mcp-gpt-5.6-sol-ultra"],"env":{"KAGI_SESSION_TOKEN":"${KAGI_SESSION_TOKEN}"},"requestTimeoutMs":60000,"connectionTimeoutMs":30000,"toolFilter":{"include":["kagi_search","kagi_list_lenses"]}}'
+openclaw mcp doctor kagi-session --probe
 ```
 
-许多桌面 MCP 客户端会以明文保存 `env` 对象。条件允许时，请优先使用继承的
-环境变量或客户端提供的密钥存储。切勿把该配置文件发送给任何人。
+`${KAGI_SESSION_TOKEN}` 会在激活时从 OpenClaw 进程环境中解析。OpenClaw
+也可以从受信任的全局环境文件 `~/.openclaw/.env` 加载它。请参阅官方
+[OpenClaw MCP](https://docs.openclaw.ai/cli/mcp) 和
+[环境变量](https://docs.openclaw.ai/help/environment)文档。在 Windows 上，
+OpenClaw 推荐使用 [WSL2](https://docs.openclaw.ai/windows) 以获得最佳兼容性。
+
+### Hermes Agent
+
+先把凭据写入 Hermes Agent 的私有环境文件：
+
+```dotenv
+# ~/.hermes/.env
+KAGI_SESSION_TOKEN=your_token_or_complete_session_link
+```
+
+然后在 `~/.hermes/config.yaml` 中添加服务器：
+
+```yaml
+mcp_servers:
+  kagi:
+    command: "npx"
+    args: ["-y", "kagi-mcp-gpt-5.6-sol-ultra"]
+    env:
+      KAGI_SESSION_TOKEN: "${KAGI_SESSION_TOKEN}"
+    enabled: true
+    tools:
+      include:
+        - kagi_search
+        - kagi_list_lenses
+```
+
+`~/.hermes/.env` 是本地明文文件，请限制其访问权限，并且不要提交或分享它。
+先用 `hermes mcp test kagi` 和 `hermes mcp list` 验证服务器，再启动
+`hermes chat`。如果在会话期间修改了配置，请使用 `/reload-mcp`；Hermes
+会以 `mcp_kagi_kagi_search` 等名称暴露这些工具。请参阅官方
+[Hermes Agent MCP 指南](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp/)。
 
 ## 本地源码与 Windows DPAPI 开发流程
 
@@ -169,17 +240,18 @@ npm run check
 
 构建输出位于 `dist`。
 
-### DPAPI 凭据启动器
+### 使用 DPAPI 存储 Windows 凭据
 
-如需长期使用本地 Codex 开发版本，请为当前 Windows 用户加密保存凭据：
+如需长期使用本地源码版本，请为当前 Windows 用户加密保存凭据：
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass `
   -File .\scripts\store-session-token.ps1
 ```
 
-然后将以下内容添加到 `C:\Users\YOUR_USER\.codex\config.toml`，并将检出目录
-替换为它的绝对路径：
+让任意支持 stdio 的 MCP 客户端启动 `scripts\run-with-session-token.mjs`。
+例如，在 Codex 中可将以下内容添加到
+`C:\Users\YOUR_USER\.codex\config.toml`，并将检出目录替换为它的绝对路径：
 
 ```toml
 [mcp_servers.kagi_session]
@@ -195,8 +267,8 @@ default_tools_approval_mode = "auto"
 
 加密值保存在 `%APPDATA%\kagi-session-mcp\session-token.dpapi`。启动器只在
 内存中解密它，启动本地构建的 MCP 服务器，并直接转发 MCP stdio。该启动器
-属于源码目录；上面的 npm/npx 配置则使用继承的环境变量。修改 `config.toml`
-后请重新启动 Codex。
+属于源码目录；上面的 npm/npx 配置则使用继承的环境变量。修改配置后，请重新启动
+MCP 客户端。
 
 在不暴露凭据的情况下测试实际安装的启动器：
 
