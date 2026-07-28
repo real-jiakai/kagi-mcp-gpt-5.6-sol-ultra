@@ -1,0 +1,65 @@
+{
+  "name": "kagi-mcp-gpt-5.6-sol-ultra",
+  "version": "0.1.0",
+  "description": "A compact, local-only MCP search server backed by a personal Kagi Session Link.",
+  "type": "module",
+  "files": [
+    "dist/",
+    "LICENSE",
+    "README.md",
+    "README.zh-CN.md"
+  ],
+  "bin": {
+    "kagi-mcp-gpt-5.6-sol-ultra": "dist/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/real-jiakai/kagi-mcp-gpt-5.6-sol-ultra.git"
+  },
+  "homepage": "https://github.com/real-jiakai/kagi-mcp-gpt-5.6-sol-ultra#readme",
+  "bugs": {
+    "url": "https://github.com/real-jiakai/kagi-mcp-gpt-5.6-sol-ultra/issues"
+  },
+  "keywords": [
+    "kagi",
+    "mcp",
+    "model-context-protocol",
+    "search",
+    "ai-agent",
+    "session-link",
+    "typescript"
+  ],
+  "author": "Jiakai Gu",
+  "engines": {
+    "node": ">=20.18.1"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "validate:stdio": "node scripts/validate-stdio.mjs",
+    "check": "npm run typecheck && npm test && npm run build && npm run validate:stdio",
+    "prepack": "npm run build",
+    "smoke": "node dist/smoke.js",
+    "smoke:installed": "node scripts/smoke-installed-mcp.mjs",
+    "smoke:installed:all": "node scripts/search-all-installed.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "cheerio": "1.2.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "tsx": "4.23.1",
+    "typescript": "7.0.2"
+  },
+  "overrides": {
+    "@hono/node-server": "2.0.12"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT"
+}
