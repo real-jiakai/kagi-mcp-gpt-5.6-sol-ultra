@@ -1,8 +1,8 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { Client } from "@modelcontextprotocol/client";
 import {
   getDefaultEnvironment,
   StdioClientTransport,
-} from "@modelcontextprotocol/sdk/client/stdio.js";
+} from "@modelcontextprotocol/client/stdio";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -59,7 +59,7 @@ const transport = new StdioClientTransport({
 });
 const client = new Client({
   name: "kagi-session-mcp-installed-pagination-smoke",
-  version: "0.1.0",
+  version: "0.2.0",
 });
 
 let connected = false;

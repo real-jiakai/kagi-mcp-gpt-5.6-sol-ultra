@@ -1,17 +1,21 @@
 #!/usr/bin/env node
 
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 
 import { LazyKagiSearcher } from "./kagi-client.js";
 import { buildServer } from "./server.js";
 
-async function main(): Promise<void> {
-  const server = buildServer(new LazyKagiSearcher());
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+function main(): void {
+  serveStdio(() => buildServer(new LazyKagiSearcher()), {
+    onerror: () => {
+      console.error("The Kagi Session MCP server encountered a transport error.");
+    },
+  });
 }
 
-main().catch(() => {
+try {
+  main();
+} catch {
   console.error("The Kagi Session MCP server could not start.");
   process.exitCode = 1;
-});
+}

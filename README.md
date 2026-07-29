@@ -1,4 +1,4 @@
-[English](./README.md) | [简体中文](./README.zh-CN.md)
+**English** | [简体中文](./README.zh-CN.md)
 
 # Kagi Session MCP
 
@@ -9,11 +9,12 @@ It exposes two read-only tools:
 
 - `kagi_search` - ranked web results with title, URL, domain, snippet, optional
   date, related queries, pagination metadata, and a short in-memory cache.
-- `kagi_list_lenses` - active and inactive account Lenses with the numeric IDs
-  required by Kagi's current HTML search frontend.
+- `kagi_list_lenses` - a discovery helper, not a search. It reads the
+  signed-in account's Lens names, descriptions, stable numeric IDs, and active
+  states so an agent can select a valid Lens without guessing.
 
-It works with Codex, OpenClaw, Hermes Agent, and other stdio-capable MCP
-clients.
+It works with Claude Code, Codex, OpenClaw, Hermes Agent, and other
+stdio-capable MCP clients.
 
 > **Acknowledgement:** Development and documentation were assisted by
 > GPT-5.6 Sol Ultra in Codex. The package name records that development
@@ -68,6 +69,11 @@ The server still makes outbound HTTPS requests to the exact
 transport and credential boundary; it does not mean that Kagi searches work
 offline.
 
+The server uses the stable TypeScript SDK v2 stdio entry point. A new client
+can open with stateless `server/discover` negotiation for MCP `2026-07-28`,
+while an older client can use the legacy initialize handshake against the
+same executable. No client-specific configuration switch is required.
+
 Streamable HTTP transport is intentionally not enabled. A network listener
 would add authentication, authorization, TLS, deployment, and multi-user
 credential-isolation concerns around a Session Link that grants broad access
@@ -77,22 +83,25 @@ production-supported service.
 
 ## Requirements
 
-- Node.js 20.18.1 or newer
+- Node.js 24 LTS recommended; install the latest 24.x release
+  ([24.18.0](https://nodejs.org/en/blog/release/v24.18.0) when this README was
+  updated). The minimum supported version remains 20.18.1.
 - A personal Kagi paid account
 - A current Kagi Session Link from the Kagi Control Center
 
-## Configure the secret
+## Quick start
 
-Set the credential in the same environment that launches your MCP client. The
-value may be either the raw token or the complete Session Link.
+Get a Session Link from the Kagi Control Center, then set it in the environment
+that starts your MCP client. The value may be either the raw token or the
+complete Session Link.
 
-This PowerShell form avoids putting the secret directly in the command line:
+PowerShell:
 
 ```powershell
 $env:KAGI_SESSION_TOKEN = Read-Host "Paste the Kagi token or complete Session Link"
 ```
 
-On macOS, Linux, or WSL:
+macOS, Linux, or WSL:
 
 ```bash
 read -rsp "Paste the Kagi token or complete Session Link: " KAGI_SESSION_TOKEN
@@ -100,30 +109,11 @@ export KAGI_SESSION_TOKEN
 printf '\n'
 ```
 
-Do not put the real value in `.env.example`. This project does not load `.env`
-files automatically, which avoids silently copying a full account credential
-into the project.
+Choose one client recipe below. Every recipe lets the client run the package
+through `npx`; no global installation is required. Never put the real
+credential in a repository, command argument, or shared configuration file.
 
-## Run from npm
-
-No global installation is required. After setting the credential, run the
-public npm package with:
-
-```powershell
-npx -y kagi-mcp-gpt-5.6-sol-ultra
-```
-
-To install the command globally instead:
-
-```powershell
-npm install --global kagi-mcp-gpt-5.6-sol-ultra
-kagi-mcp-gpt-5.6-sol-ultra
-```
-
-When started directly, the command waits for MCP messages on stdin; an idle
-terminal is expected. In normal use, let your MCP client start it.
-
-## Use with an MCP client
+## Install in your MCP client
 
 Every client launches the same local stdio command:
 
@@ -135,30 +125,18 @@ The client must pass `KAGI_SESSION_TOKEN` to that process. Prefer inheriting it
 from the client process or resolving it from a local secret store instead of
 writing the real value into a configuration file.
 
-### Generic JSON configuration
+### Claude Code
 
-For clients that use the common `mcpServers` JSON shape:
+Run this after setting `KAGI_SESSION_TOKEN` in the same shell:
 
-```json
-{
-  "mcpServers": {
-    "kagi-session": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "kagi-mcp-gpt-5.6-sol-ultra"
-      ],
-      "env": {
-        "KAGI_SESSION_TOKEN": "PASTE_LOCALLY_OR_RESOLVE_FROM_YOUR_SECRET_STORE"
-      }
-    }
-  }
-}
+```bash
+claude mcp add --scope user --transport stdio kagi-session -- npx -y kagi-mcp-gpt-5.6-sol-ultra
+claude mcp get kagi-session
 ```
 
-Many desktop MCP clients store the `env` object as plain text. Prefer an
-inherited environment variable or your client's secret store when available,
-and never share the resulting configuration file.
+Start Claude Code from that environment and use `/mcp` to verify the server.
+User scope makes the tool available across projects. See the official
+[Claude Code MCP documentation](https://code.claude.com/docs/en/mcp).
 
 ### Codex
 
@@ -170,24 +148,12 @@ Add this to `~/.codex/config.toml` (on Windows, normally
 command = "npx"
 args = ["-y", "kagi-mcp-gpt-5.6-sol-ultra"]
 env_vars = ["KAGI_SESSION_TOKEN"]
-startup_timeout_sec = 30
-tool_timeout_sec = 60
-enabled = true
-required = false
-default_tools_approval_mode = "auto"
 ```
 
 `env_vars` forwards `KAGI_SESSION_TOKEN` from the local Codex process without
 writing its value into `config.toml`. Start Codex from an environment that has
 the variable set, then restart Codex after changing the configuration. In the
 Codex TUI, use `/mcp` to confirm that the server initialized.
-
-If Windows cannot find `npx`, replace `command = "npx"` with the absolute path
-to your `npx.cmd`, for example:
-
-```toml
-command = "C:\\Users\\YOUR_USER\\.codex\\tools\\node\\npx.cmd"
-```
 
 See the official
 [Codex MCP documentation](https://learn.chatgpt.com/docs/extend/mcp.md) for
@@ -243,93 +209,29 @@ during a session, use `/reload-mcp`; Hermes exposes these tools with names such
 as `mcp_kagi_kagi_search`. See the official
 [Hermes Agent MCP guide](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp/).
 
-## Local source checkout and Windows DPAPI development
+### Other MCP clients
 
-Use a source checkout when developing, running the test suite, or using the
-included Windows DPAPI launcher:
+For clients that use the common `mcpServers` JSON shape:
 
-```powershell
-git clone https://github.com/real-jiakai/kagi-mcp-gpt-5.6-sol-ultra.git
-cd kagi-mcp-gpt-5.6-sol-ultra
-npm install
-npm run check
+```json
+{
+  "mcpServers": {
+    "kagi-session": {
+      "command": "npx",
+      "args": ["-y", "kagi-mcp-gpt-5.6-sol-ultra"],
+      "env": {
+        "KAGI_SESSION_TOKEN": "${KAGI_SESSION_TOKEN}"
+      }
+    }
+  }
+}
 ```
 
-Build output is written to `dist`.
+Environment-variable expansion differs between clients. If yours does not
+support it, use its local secret store; do not place the real value in a
+shared configuration.
 
-### Windows credential storage with DPAPI
-
-For a persistent local source installation, store the credential encrypted for
-the current Windows user:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass `
-  -File .\scripts\store-session-token.ps1
-```
-
-Point any stdio-capable MCP client at
-`scripts\run-with-session-token.mjs`. For example, in Codex add this to
-`C:\Users\YOUR_USER\.codex\config.toml`, replacing the checkout path with its
-absolute location:
-
-```toml
-[mcp_servers.kagi_session]
-command = "C:\\Users\\YOUR_USER\\.codex\\tools\\node\\node.exe"
-args = ["C:\\path\\to\\kagi-mcp-gpt-5.6-sol-ultra\\scripts\\run-with-session-token.mjs"]
-cwd = "C:\\path\\to\\kagi-mcp-gpt-5.6-sol-ultra"
-startup_timeout_sec = 15
-tool_timeout_sec = 60
-enabled = true
-required = false
-default_tools_approval_mode = "auto"
-```
-
-The encrypted value is stored under
-`%APPDATA%\kagi-session-mcp\session-token.dpapi`. The launcher decrypts it
-only in memory, starts the locally built MCP server, and forwards MCP stdio
-directly. This launcher belongs to the source checkout; the npm/npx setup above
-uses the inherited environment variable instead. Restart the MCP client after
-changing its configuration.
-
-To test the exact installed launcher without exposing the credential:
-
-```powershell
-npm run build
-npm run smoke:installed
-```
-
-To exercise installed-MCP pagination through the same DPAPI-backed launcher,
-deduplicate exact result URLs, and print one aggregate JSON object:
-
-```powershell
-npm run build
-npm run smoke:installed:all
-```
-
-This searches `KAGI_SMOKE_QUERY` (default: `gemini 3.5 pro`) with 20 results
-per page until Kagi reports no more pages or 10 pages have been fetched. Its
-single JSON response includes per-page metadata, globally numbered unique
-results, and an exact count of duplicate URLs removed across pages.
-
-## Optional live smoke test
-
-The automated test suite never uses a real account. From a source checkout,
-perform one intentional live search after setting the environment variable:
-
-```powershell
-npm run build
-npm run smoke
-```
-
-You can choose the test query without placing the credential on the command
-line:
-
-```powershell
-$env:KAGI_SMOKE_QUERY = "Model Context Protocol"
-npm run smoke
-```
-
-## Agent-facing contract
+## Tool reference
 
 `kagi_search` accepts:
 
@@ -355,57 +257,17 @@ is true only when the requested `limit` locally hides some of those cards.
 
 ### Lens selection
 
-For common built-in Lenses, the agent can pass one of these names directly:
+`kagi_list_lenses` is a discovery helper, not a search tool. It reads the
+signed-in account's Lens settings and returns each Lens's name, description,
+stable numeric ID, and active state. An agent should call it only when it
+needs a Lens-filtered search, then pass an active ID to `kagi_search.lens`.
 
-| Name | Current Lens ID |
-| --- | ---: |
-| `forums` | `1` |
-| `academic` | `2` |
-| `pdfs` | `3` |
-| `programming` | `15` |
-| `news_360` | `29` |
-| `small_web` | `107` |
-| `recipes` | `120` |
-| `fediverse_forums` | `4248` |
-| `kagi_documentation` | `3271` |
-| `usenet_archive` | `5648` |
-| `cyber_security` | `4583` |
-| `jobs` | `19487` |
+The Lens list is briefly cached and does not consume a search. If a requested
+Lens is inactive or Kagi ignores it, `kagi_search` returns `filter_rejected`
+instead of silently returning unfiltered results.
 
-An account can disable built-ins or add custom Lenses. For deterministic agent
-behavior, call `kagi_list_lenses` and pass the returned numeric ID. The list
-comes from `/html/settings/lenses`, is cached briefly, and does not consume a
-search. If a requested Lens is inactive or Kagi ignores it, `kagi_search`
-fails closed with `filter_rejected` instead of silently returning unfiltered
-results.
-
-### Browser-verified URL mapping
-
-The current Kagi UI was exercised in a signed-in Chrome session:
-
-- selected Lens: `lens=<stable numeric Lens ID>`;
-- selected country/region: `r=<code>`;
-- no Lens: omit `lens` rather than using the stateful "last used Lens" toggle;
-- ordinary result page 2: `batch=2`;
-- Lens result page 2: `page=2`.
-
-The MCP deliberately does not use the older `l=<menu position>` parameter.
-Menu positions change when the account reorders Lenses; the IDs shown on
-Kagi's Lens settings page are stable. The official Kagi Search API is a
-different protocol (`lens_id` in JSON) and should not be mixed with this
-session-backed HTML endpoint.
-
-## Runtime controls
-
-| Environment variable | Default | Allowed |
-| --- | ---: | ---: |
-| `KAGI_TIMEOUT_MS` | `15000` | `1000`-`30000` |
-| `KAGI_CACHE_TTL_MS` | `60000` | `0`-`600000` |
-| `KAGI_MAX_CONCURRENCY` | `2` | `1`-`4` |
-
-The cache is memory-only and disappears when the MCP process exits. Automatic
-HTTP retries are intentionally disabled so one agent call cannot silently
-consume multiple searches.
+Typical workflow: `kagi_list_lenses` → choose an active numeric ID →
+`kagi_search` with that ID in `lens`.
 
 ## Failure behavior
 
@@ -413,22 +275,9 @@ consume multiple searches.
 - `forbidden` - the session may be stale, or Kagi may reject the current IP.
 - `filter_rejected` - activate the Lens in Kagi settings or select an active ID.
 - `rate_limited` - wait for the reported interval before retrying.
-- `parser_changed` - Kagi returned valid HTML that no longer matches the
-  observed result structure; update the fixture and parser before trusting it.
+- `parser_changed` - Kagi's page structure may have changed; upgrade the
+  package or [report an issue](https://github.com/real-jiakai/kagi-mcp-gpt-5.6-sol-ultra/issues).
 - `timeout` / `upstream` - a bounded network or Kagi service failure.
 
 All agent-visible errors are sanitized. Raw response bodies and request
 headers are never logged.
-
-## Development
-
-```powershell
-npm test
-npm run typecheck
-npm run build
-```
-
-The tests cover Session Link normalization, deceptive-host rejection, search
-and Lens-settings parsing, stable Lens-ID resolution, Lens versus ordinary
-pagination, region variants, token non-disclosure, auth redirects, rate
-limits, filter rejection, and cache reuse. Live-account tests are opt-in only.

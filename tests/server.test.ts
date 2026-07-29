@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 
 import { buildServer } from "../src/server.js";
 import { resolveLensId } from "../src/types.js";
@@ -68,7 +67,7 @@ test("the MCP contract exposes compact search and Lens discovery tools", async (
   const server = buildServer(searcher);
   const client = new Client({
     name: "kagi-session-mcp-tests",
-    version: "0.1.0",
+    version: "0.2.0",
   });
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();
@@ -196,7 +195,7 @@ test("the MCP contract sanitizes unexpected backend errors", async () => {
   const server = buildServer(searcher);
   const client = new Client({
     name: "kagi-session-mcp-tests",
-    version: "0.1.0",
+    version: "0.2.0",
   });
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();

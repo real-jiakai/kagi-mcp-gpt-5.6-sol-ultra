@@ -15,7 +15,7 @@ import type {
 const KAGI_SEARCH_ENDPOINT = "https://kagi.com/html/search";
 const KAGI_LENSES_ENDPOINT = "https://kagi.com/html/settings/lenses";
 const USER_AGENT =
-  "kagi-mcp-gpt-5.6-sol-ultra/0.1.0 (local personal search client)";
+  "kagi-mcp-gpt-5.6-sol-ultra/0.2.0 (local personal search client)";
 const MAX_CACHE_ENTRIES = 100;
 
 const TIME_RANGE_PARAMETERS = {
